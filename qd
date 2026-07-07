@@ -1,0 +1,85 @@
+from qdrant_client import QdrantClient
+from qdrant_client.models import Distance, VectorParams, PointStruct
+
+# 1. Create in-memory Qdrant client
+client = QdrantClient(":memory:")
+
+# 2. Create a collection
+client.create_collection(
+    collection_name="test_models",
+    vectors_config=VectorParams(
+        size=3,
+        distance=Distance.COSINE,
+    ),
+)
+
+# 3. Insert fake records with fake vectors
+client.upsert(
+    collection_name="test_models",
+    points=[
+        PointStruct(
+            id=1,
+            vector=[0.9, 0.1, 0.1],
+            payload={
+                "model_name": "Retail PD Model",
+                "risk_level": "High",
+                "business_unit": "Credit",
+                "description": "Predicts probability of default.",
+            },
+        ),
+        PointStruct(
+            id=2,
+            vector=[0.1, 0.9, 0.1],
+            payload={
+                "model_name": "Fraud Model",
+                "risk_level": "Medium",
+                "business_unit": "Cards",
+                "description": "Detects suspicious transactions.",
+            },
+        ),
+        PointStruct(
+            id=3,
+            vector=[0.8, 0.2, 0.1],
+            payload={
+                "model_name": "Another Credit Model",
+                "risk_level": "High",
+                "business_unit": "Credit",
+                "description": "Estimates customer credit risk.",
+            },
+        ),
+    ],
+)
+
+# 4. Semantic/vector search
+results = client.query_points(
+    collection_name="test_models",
+    query=[1.0, 0.0, 0.0],
+    limit=3,
+    with_payload=True,
+)
+
+print("\nSemantic search results:")
+for hit in results.points:
+    print(hit.score, hit.payload["model_name"])
+
+# 5. Structured filter + vector search
+from qdrant_client.models import Filter, FieldCondition, MatchValue
+
+filtered_results = client.query_points(
+    collection_name="test_models",
+    query=[1.0, 0.0, 0.0],
+    query_filter=Filter(
+        must=[
+            FieldCondition(
+                key="risk_level",
+                match=MatchValue(value="High"),
+            )
+        ]
+    ),
+    limit=3,
+    with_payload=True,
+)
+
+print("\nFiltered semantic search results:")
+for hit in filtered_results.points:
+    print(hit.score, hit.payload["model_name"], hit.payload["risk_level"])
